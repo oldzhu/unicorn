@@ -70,11 +70,12 @@ typedef size_t uc_hook;
 // Unicorn API version
 #define UC_API_MAJOR 2
 #define UC_API_MINOR 0
+#define UC_API_EXTRA 4
 
 // Unicorn package version
 #define UC_VERSION_MAJOR UC_API_MAJOR
 #define UC_VERSION_MINOR UC_API_MINOR
-#define UC_VERSION_EXTRA 0
+#define UC_VERSION_EXTRA UC_API_EXTRA
 
 /*
   Macro to create combined version which can be compared to
@@ -258,9 +259,9 @@ typedef void (*uc_hook_edge_gen_t)(uc_engine *uc, uc_tb *cur_tb, uc_tb *prev_tb,
   @arg2: The second argument.
 */
 typedef void (*uc_hook_tcg_op_2)(uc_engine *uc, uint64_t address, uint64_t arg1,
-                                 uint64_t arg2, void *user_data);
+                                 uint64_t arg2, uint32_t size, void *user_data);
 
-typedef uc_hook_tcg_op_2 uc_hook_tcg_sub;
+typedef uc_hook_tcg_op_2 uc_hook_tcg_sub_t;
 
 /*
   Callback function for MMIO read
@@ -473,7 +474,8 @@ typedef enum uc_query_type {
 // The arguments include both input and output arugments.
 #define UC_CTL_IO_READ_WRITE (UC_CTL_IO_WRITE | UC_CTL_IO_READ)
 
-#define UC_CTL(type, nr, rw) ((type) | ((nr) << 26) | ((rw) << 30))
+#define UC_CTL(type, nr, rw)                                                   \
+    (uc_control_type)((type) | ((nr) << 26) | ((rw) << 30))
 #define UC_CTL_NONE(type, nr) UC_CTL(type, nr, UC_CTL_IO_NONE)
 #define UC_CTL_READ(type, nr) UC_CTL(type, nr, UC_CTL_IO_READ)
 #define UC_CTL_WRITE(type, nr) UC_CTL(type, nr, UC_CTL_IO_WRITE)
@@ -521,11 +523,54 @@ typedef enum uc_control_type {
     // Read: @args = (uint64_t, uc_tb*)
     UC_CTL_TB_REQUEST_CACHE,
     // Invalidate a tb cache at a specific address
-    // Write: @args = (uint64_t)
+    // Write: @args = (uint64_t, uint64_t)
     UC_CTL_TB_REMOVE_CACHE
 
 } uc_control_type;
 
+/*
+
+Exits Mechanism
+
+In some cases, users may have multiple exits and the @until parameter of
+uc_emu_start is not sufficient to control the emulation. The exits mechanism is
+designed to solve this problem. Note that using hooks is aslo feasible, but the
+exits could be slightly more efficient and easy to implement.
+
+By default, the exits mechanism is disabled to keep backward compatibility. That
+is to say, calling uc_ctl_set/get_exits would return an error. Thus, to enable
+the exits firstly, call:
+
+  uc_ctl_exits_enable(uc)
+
+After this call, the @until parameter of uc_emu_start would have no effect on
+the emulation, so:
+
+  uc_emu_start(uc, 0x1000, 0 ...)
+  uc_emu_start(uc, 0x1000, 0x1000 ...)
+  uc_emu_start(uc, 0x1000, -1 ...)
+
+The three calls are totally equavelent since the @until is ignored.
+
+To setup the exits, users may call:
+
+  uc_ctl_set/get_exits(uc, exits, len)
+
+For example, with an exits array [0x1000, 0x2000], uc_emu_start would stop at
+either 0x1000 and 0x2000. With an exits array [], uc_emu_start won't stop unless
+some hooks request a stop.
+
+If users would like to restore the default behavior of @until parameter, users
+may call:
+
+  uc_ctl_exits_disable(uc)
+
+After that, all exits setup previously would be cleared and @until parameter
+would take effect again.
+
+See sample_ctl.c for a detailed example.
+
+*/
 #define uc_ctl_get_mode(uc, mode)                                              \
     uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_MODE, 1), (mode))
 #define uc_ctl_get_page_size(uc, ptr)                                          \
@@ -536,8 +581,10 @@ typedef enum uc_control_type {
     uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_ARCH, 1), (arch))
 #define uc_ctl_get_timeout(uc, ptr)                                            \
     uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_TIMEOUT, 1), (ptr))
-#define uc_ctl_exits_enabled(uc, enabled)                                      \
-    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_UC_USE_EXITS, 1), (enabled))
+#define uc_ctl_exits_enable(uc)                                                \
+    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_UC_USE_EXITS, 1), 1)
+#define uc_ctl_exits_disable(uc)                                               \
+    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_UC_USE_EXITS, 1), 0)
 #define uc_ctl_get_exits_cnt(uc, ptr)                                          \
     uc_ctl(uc, UC_CTL_READ(UC_CTL_UC_EXITS_CNT, 1), (ptr))
 #define uc_ctl_get_exits(uc, buffer, len)                                      \
@@ -548,8 +595,8 @@ typedef enum uc_control_type {
     uc_ctl(uc, UC_CTL_READ(UC_CTL_CPU_MODEL, 1), (model))
 #define uc_ctl_set_cpu_model(uc, model)                                        \
     uc_ctl(uc, UC_CTL_WRITE(UC_CTL_CPU_MODEL, 1), (model))
-#define uc_ctl_remove_cache(uc, address)                                       \
-    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_TB_REMOVE_CACHE, 1), (address))
+#define uc_ctl_remove_cache(uc, address, end)                                  \
+    uc_ctl(uc, UC_CTL_WRITE(UC_CTL_TB_REMOVE_CACHE, 2), (address), (end))
 #define uc_ctl_request_cache(uc, address, tb)                                  \
     uc_ctl(uc, UC_CTL_READ_WRITE(UC_CTL_TB_REQUEST_CACHE, 2), (address), (tb))
 

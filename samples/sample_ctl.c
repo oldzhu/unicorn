@@ -118,7 +118,7 @@ void test_uc_ctl_exits()
     }
 
     // Enable multiple exits.
-    err = uc_ctl_exits_enabled(uc, true);
+    err = uc_ctl_exits_enable(uc);
     if (err) {
         printf("Failed on uc_ctl() with error returned: %u\n", err);
         return;
@@ -258,7 +258,8 @@ static void test_uc_ctl_tb_cache()
 
     // Now we clear cache for all TBs.
     for (int i = 0; i < TB_COUNT; i++) {
-        err = uc_ctl_remove_cache(uc, ADDRESS + i * TCG_MAX_INSNS);
+        err = uc_ctl_remove_cache(uc, ADDRESS + i * TCG_MAX_INSNS,
+                                  ADDRESS + i * TCG_MAX_INSNS + 1);
         if (err) {
             printf("Failed on uc_ctl() with error returned: %u\n", err);
             return;
