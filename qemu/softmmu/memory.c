@@ -82,12 +82,15 @@ typedef struct _mmio_cbs {
     void *user_data_read;
     uc_cb_mmio_write_t write;
     void *user_data_write;
+    MemoryRegionOps ops;
 } mmio_cbs;
 
 static uint64_t mmio_read_wrapper(struct uc_struct *uc, void *opaque, hwaddr addr, unsigned size)
 {
     mmio_cbs* cbs = (mmio_cbs*)opaque;
     
+    // We have to care about 32bit target.
+    addr = addr & ( (target_ulong)(-1) );
     if (cbs->read) {
         return cbs->read(uc, addr, size, cbs->user_data_read);
     } else {
@@ -99,6 +102,8 @@ static void mmio_write_wrapper(struct uc_struct *uc, void *opaque, hwaddr addr, 
 {
     mmio_cbs* cbs = (mmio_cbs*)opaque;
     
+    // We have to care about 32bit target.
+    addr = addr & ( (target_ulong)(-1) );
     if (cbs->write) {
         cbs->write(uc, addr, size, data, cbs->user_data_write);
     }
@@ -114,8 +119,8 @@ MemoryRegion *memory_map_io(struct uc_struct *uc, ram_addr_t begin, size_t size,
                             void *user_data_read, void *user_data_write)
 {
     MemoryRegion *mmio = g_new(MemoryRegion, 1);
-    MemoryRegionOps *ops = g_new(MemoryRegionOps, 1);
     mmio_cbs* opaques = g_new(mmio_cbs, 1);
+    MemoryRegionOps *ops = &opaques->ops;
     opaques->read = read_cb;
     opaques->write = write_cb;
     opaques->user_data_read = user_data_read;

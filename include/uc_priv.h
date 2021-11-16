@@ -12,6 +12,9 @@
 #include "unicorn/unicorn.h"
 #include "list.h"
 
+// The max recursive nested uc_emu_start levels
+#define UC_MAX_NESTED_LEVEL (64)
+
 // These are masks of supported modes for each cpu/arch.
 // They should be updated when changes are made to the uc_mode enum typedef.
 #define UC_MODE_ARM_MASK                                                       \
@@ -338,21 +341,20 @@ struct uc_struct {
                       // default)
     bool first_tb; // is this the first Translation-Block ever generated since
                    // uc_emu_start()?
-    struct list saved_contexts; // The contexts saved by this uc_struct.
-    bool no_exit_request;       // Disable check_exit_request temporarily. A
+    bool no_exit_request; // Disable check_exit_request temporarily. A
                           // workaround to treat the IT block as a whole block.
-    bool init_done; // Whether the initialization is done.
+    bool init_done;       // Whether the initialization is done.
+
+    sigjmp_buf jmp_bufs[UC_MAX_NESTED_LEVEL]; // To support nested uc_emu_start
+    int nested_level;                         // Current nested_level
 };
 
 // Metadata stub for the variable-size cpu context used with uc_context_*()
-// We also save cpu->jmp_env, so emulation can be reentrant
 struct uc_context {
     size_t context_size; // size of the real internal context structure
-    size_t jmp_env_size; // size of cpu->jmp_env
-    uc_mode mode;        // the mode of this context (uc may be free-ed already)
-    uc_arch arch;        // the arch of this context (uc may be free-ed already)
-    struct uc_struct *uc; // the uc_struct which creates this context
-    char data[0];         // context + cpu->jmp_env
+    uc_mode mode;        // the mode of this context
+    uc_arch arch;        // the arch of this context
+    char data[0];        // context
 };
 
 // check if this address is mapped in (via uc_mem_map())
