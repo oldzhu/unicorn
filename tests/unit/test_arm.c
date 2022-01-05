@@ -325,6 +325,8 @@ static void test_arm_usr32_to_svc32()
     OK(uc_reg_write(uc, UC_ARM_REG_CPSR, &r_cpsr));
     r_sp = 0x12345678;
     OK(uc_reg_write(uc, UC_ARM_REG_SP, &r_sp));
+    r_lr = 0x00102220;
+    OK(uc_reg_write(uc, UC_ARM_REG_LR, &r_lr));
 
     r_cpsr = 0x4000009b; // UND32
     OK(uc_reg_write(uc, UC_ARM_REG_CPSR, &r_cpsr));
@@ -332,18 +334,28 @@ static void test_arm_usr32_to_svc32()
     OK(uc_reg_write(uc, UC_ARM_REG_SPSR, &r_spsr));
     r_sp = 0xDEAD0000;
     OK(uc_reg_write(uc, UC_ARM_REG_SP, &r_sp));
-    r_lr = code_start + 8;
+    r_lr = 0x00509998;
     OK(uc_reg_write(uc, UC_ARM_REG_LR, &r_lr));
+
+    OK(uc_reg_read(uc, UC_ARM_REG_CPSR, &r_cpsr));
+    TEST_CHECK((r_cpsr & ((1 << 4) - 1)) == 0xb); // We are in UND32
 
     r_cpsr = 0x40000090; // USR32
     OK(uc_reg_write(uc, UC_ARM_REG_CPSR, &r_cpsr));
     r_sp = 0x0010000;
     OK(uc_reg_write(uc, UC_ARM_REG_R13, &r_sp));
+    r_lr = 0x0001234;
+    OK(uc_reg_write(uc, UC_ARM_REG_LR, &r_lr));
+
+    OK(uc_reg_read(uc, UC_ARM_REG_CPSR, &r_cpsr));
+    TEST_CHECK((r_cpsr & ((1 << 4) - 1)) == 0); // We are in USR32
 
     r_cpsr = 0x40000093; // SVC32
     OK(uc_reg_write(uc, UC_ARM_REG_CPSR, &r_cpsr));
 
+    OK(uc_reg_read(uc, UC_ARM_REG_CPSR, &r_cpsr));
     OK(uc_reg_read(uc, UC_ARM_REG_SP, &r_sp));
+    TEST_CHECK((r_cpsr & ((1 << 4) - 1)) == 3); // We are in SVC32
     TEST_CHECK(r_sp == 0x12345678);
 
     OK(uc_close(uc));
@@ -445,6 +457,20 @@ static void test_arm_not_allow_privilege_escalation()
     OK(uc_close(uc));
 }
 
+static void test_arm_mrc()
+{
+    uc_engine *uc;
+    // mrc p15, #0, r0, c1, c1, #0
+    char code[] = "\x11\x0F\x11\xEE";
+
+    uc_common_setup(&uc, UC_ARCH_ARM, UC_MODE_ARM, code, sizeof(code) - 1,
+                    UC_CPU_ARM_MAX);
+
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code) - 1, 0, 0));
+
+    OK(uc_close(uc));
+}
+
 TEST_LIST = {{"test_arm_nop", test_arm_nop},
              {"test_arm_thumb_sub", test_arm_thumb_sub},
              {"test_armeb_sub", test_armeb_sub},
@@ -459,4 +485,5 @@ TEST_LIST = {{"test_arm_nop", test_arm_nop},
              {"test_arm_thumb_smlabb", test_arm_thumb_smlabb},
              {"test_arm_not_allow_privilege_escalation",
               test_arm_not_allow_privilege_escalation},
+             {"test_arm_mrc", test_arm_mrc},
              {NULL, NULL}};
