@@ -150,8 +150,9 @@ static void v7m_msr_xpsr(CPUARMState *env, uint32_t mask, uint32_t reg,
 static uc_err read_cp_reg(CPUARMState *env, uc_arm_cp_reg *cp)
 {
     ARMCPU *cpu = ARM_CPU(env->uc->cpu);
+    int ns = cp->sec ? 0 : 1;
     const ARMCPRegInfo *ri = get_arm_cp_reginfo(
-        cpu->cp_regs, ENCODE_CP_REG(cp->cp, cp->is64, cp->sec, cp->crn, cp->crm,
+        cpu->cp_regs, ENCODE_CP_REG(cp->cp, cp->is64, ns, cp->crn, cp->crm,
                                     cp->opc1, cp->opc2));
 
     if (!ri) {
@@ -170,8 +171,9 @@ static uc_err read_cp_reg(CPUARMState *env, uc_arm_cp_reg *cp)
 static uc_err write_cp_reg(CPUARMState *env, uc_arm_cp_reg *cp)
 {
     ARMCPU *cpu = ARM_CPU(env->uc->cpu);
+    int ns = cp->sec ? 0 : 1;
     const ARMCPRegInfo *ri = get_arm_cp_reginfo(
-        cpu->cp_regs, ENCODE_CP_REG(cp->cp, cp->is64, cp->sec, cp->crn, cp->crm,
+        cpu->cp_regs, ENCODE_CP_REG(cp->cp, cp->is64, ns, cp->crn, cp->crm,
                                     cp->opc1, cp->opc2));
 
     if (!ri) {
@@ -473,13 +475,8 @@ int arm_reg_write(struct uc_struct *uc, unsigned int *regs, void *const *vals,
 }
 
 DEFAULT_VISIBILITY
-#ifdef TARGET_WORDS_BIGENDIAN
-int armeb_context_reg_read(struct uc_context *ctx, unsigned int *regs,
-                           void **vals, int count)
-#else
 int arm_context_reg_read(struct uc_context *ctx, unsigned int *regs,
                          void **vals, int count)
-#endif
 {
     CPUARMState *env = (CPUARMState *)ctx->data;
     int i;
@@ -498,13 +495,8 @@ int arm_context_reg_read(struct uc_context *ctx, unsigned int *regs,
 }
 
 DEFAULT_VISIBILITY
-#ifdef TARGET_WORDS_BIGENDIAN
-int armeb_context_reg_write(struct uc_context *ctx, unsigned int *regs,
-                            void *const *vals, int count)
-#else
 int arm_context_reg_write(struct uc_context *ctx, unsigned int *regs,
                           void *const *vals, int count)
-#endif
 {
     CPUARMState *env = (CPUARMState *)ctx->data;
     int i;
@@ -581,11 +573,7 @@ static int arm_cpus_init(struct uc_struct *uc, const char *cpu_model)
     return 0;
 }
 
-#ifdef TARGET_WORDS_BIGENDIAN
-void armeb_uc_init(struct uc_struct *uc)
-#else
 void arm_uc_init(struct uc_struct *uc)
-#endif
 {
     uc->reg_read = arm_reg_read;
     uc->reg_write = arm_reg_write;

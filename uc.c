@@ -28,6 +28,37 @@
 #include "qemu/include/qemu/queue.h"
 #include "qemu-common.h"
 
+static void clear_deleted_hooks(uc_engine *uc);
+
+static void *hook_insert(struct list *l, struct hook *h)
+{
+    void *item = list_insert(l, (void *)h);
+    if (item) {
+        h->refs++;
+    }
+    return item;
+}
+
+static void *hook_append(struct list *l, struct hook *h)
+{
+    void *item = list_append(l, (void *)h);
+    if (item) {
+        h->refs++;
+    }
+    return item;
+}
+
+static void hook_delete(void *data)
+{
+    struct hook *h = (struct hook *)data;
+
+    h->refs--;
+
+    if (h->refs == 0) {
+        free(h);
+    }
+}
+
 UNICORN_EXPORT
 unsigned int uc_version(unsigned int *major, unsigned int *minor)
 {
@@ -172,6 +203,12 @@ static uc_err uc_init(uc_engine *uc)
         return UC_ERR_HANDLE;
     }
 
+    uc->hooks_to_del.delete_fn = hook_delete;
+
+    for (int i = 0; i < UC_HOOK_MAX; i++) {
+        uc->hook[i].delete_fn = hook_delete;
+    }
+
     uc->exits = g_tree_new_full(uc_exits_cmp, NULL, g_free, NULL);
 
     if (machine_initialize(uc)) {
@@ -243,11 +280,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
                 free(uc);
                 return UC_ERR_MODE;
             }
-            if (mode & UC_MODE_BIG_ENDIAN) {
-                uc->init_arch = armeb_uc_init;
-            } else {
-                uc->init_arch = arm_uc_init;
-            }
+            uc->init_arch = arm_uc_init;
 
             if (mode & UC_MODE_THUMB) {
                 uc->thumb = 1;
@@ -260,11 +293,7 @@ uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **result)
                 free(uc);
                 return UC_ERR_MODE;
             }
-            if (mode & UC_MODE_BIG_ENDIAN) {
-                uc->init_arch = arm64eb_uc_init;
-            } else {
-                uc->init_arch = arm64_uc_init;
-            }
+            uc->init_arch = arm64_uc_init;
             break;
 #endif
 
@@ -377,8 +406,6 @@ UNICORN_EXPORT
 uc_err uc_close(uc_engine *uc)
 {
     int i;
-    struct list_item *cur;
-    struct hook *hook;
     MemoryRegion *mr;
 
     if (!uc->init_done) {
@@ -430,17 +457,9 @@ uc_err uc_close(uc_engine *uc)
     }
 
     // free hooks and hook lists
+    clear_deleted_hooks(uc);
+
     for (i = 0; i < UC_HOOK_MAX; i++) {
-        cur = uc->hook[i].head;
-        // hook can be in more than one list
-        // so we refcount to know when to free
-        while (cur) {
-            hook = (struct hook *)cur->data;
-            if (--hook->refs == 0) {
-                free(hook);
-            }
-            cur = cur->next;
-        }
         list_clear(&uc->hook[i]);
     }
 
@@ -678,12 +697,6 @@ static void clear_deleted_hooks(uc_engine *uc)
         assert(hook->to_delete);
         for (i = 0; i < UC_HOOK_MAX; i++) {
             if (list_remove(&uc->hook[i], (void *)hook)) {
-                if (--hook->refs == 0) {
-                    uc->del_inline_hook(uc, hook);
-                    free(hook);
-                }
-
-                // a hook cannot be twice in the same list
                 break;
             }
         }
@@ -1185,11 +1198,13 @@ static bool split_region(struct uc_struct *uc, MemoryRegion *mr,
         return false;
     }
 
+    // Find the correct and large enough (which contains our target mr)
+    // to create the content backup.
     QLIST_FOREACH(block, &uc->ram_list.blocks, next)
     {
         // block->offset is the offset within ram_addr_t, not GPA
         if (block->mr->addr <= mr->addr &&
-            block->used_length >= (mr->end - mr->addr)) {
+            block->used_length + block->mr->addr >= mr->end) {
             break;
         }
     }
@@ -1515,19 +1530,18 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
         }
 
         if (uc->hook_insert) {
-            if (list_insert(&uc->hook[UC_HOOK_INSN_IDX], hook) == NULL) {
+            if (hook_insert(&uc->hook[UC_HOOK_INSN_IDX], hook) == NULL) {
                 free(hook);
                 return UC_ERR_NOMEM;
             }
         } else {
-            if (list_append(&uc->hook[UC_HOOK_INSN_IDX], hook) == NULL) {
+            if (hook_append(&uc->hook[UC_HOOK_INSN_IDX], hook) == NULL) {
                 free(hook);
                 return UC_ERR_NOMEM;
             }
         }
 
         uc->hooks_count[UC_HOOK_INSN_IDX]++;
-        hook->refs++;
         return UC_ERR_OK;
     }
 
@@ -1547,19 +1561,18 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
         }
 
         if (uc->hook_insert) {
-            if (list_insert(&uc->hook[UC_HOOK_TCG_OPCODE_IDX], hook) == NULL) {
+            if (hook_insert(&uc->hook[UC_HOOK_TCG_OPCODE_IDX], hook) == NULL) {
                 free(hook);
                 return UC_ERR_NOMEM;
             }
         } else {
-            if (list_append(&uc->hook[UC_HOOK_TCG_OPCODE_IDX], hook) == NULL) {
+            if (hook_append(&uc->hook[UC_HOOK_TCG_OPCODE_IDX], hook) == NULL) {
                 free(hook);
                 return UC_ERR_NOMEM;
             }
         }
 
         uc->hooks_count[UC_HOOK_TCG_OPCODE_IDX]++;
-        hook->refs++;
         return UC_ERR_OK;
     }
 
@@ -1568,22 +1581,17 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
             // TODO: invalid hook error?
             if (i < UC_HOOK_MAX) {
                 if (uc->hook_insert) {
-                    if (list_insert(&uc->hook[i], hook) == NULL) {
-                        if (hook->refs == 0) {
-                            free(hook);
-                        }
+                    if (hook_insert(&uc->hook[i], hook) == NULL) {
+                        free(hook);
                         return UC_ERR_NOMEM;
                     }
                 } else {
-                    if (list_append(&uc->hook[i], hook) == NULL) {
-                        if (hook->refs == 0) {
-                            free(hook);
-                        }
+                    if (hook_append(&uc->hook[i], hook) == NULL) {
+                        free(hook);
                         return UC_ERR_NOMEM;
                     }
                 }
                 uc->hooks_count[i]++;
-                hook->refs++;
             }
         }
         i++;
@@ -1615,7 +1623,7 @@ uc_err uc_hook_del(uc_engine *uc, uc_hook hh)
         if (list_exists(&uc->hook[i], (void *)hook)) {
             hook->to_delete = true;
             uc->hooks_count[i]--;
-            list_append(&uc->hooks_to_del, hook);
+            hook_append(&uc->hooks_to_del, hook);
         }
     }
 
@@ -1860,23 +1868,14 @@ static void find_context_reg_rw_function(uc_arch arch, uc_mode mode,
 #endif
 #ifdef UNICORN_HAS_ARM
     case UC_ARCH_ARM:
-        if (mode & UC_MODE_BIG_ENDIAN) {
-            rw->context_reg_read = armeb_context_reg_read;
-            rw->context_reg_write = armeb_context_reg_write;
-        } else {
-            rw->context_reg_read = arm_context_reg_read;
-            rw->context_reg_write = arm_context_reg_write;
-        }
+        rw->context_reg_read = arm_context_reg_read;
+        rw->context_reg_write = arm_context_reg_write;
+        break;
 #endif
 #ifdef UNICORN_HAS_ARM64
     case UC_ARCH_ARM64:
-        if (mode & UC_MODE_BIG_ENDIAN) {
-            rw->context_reg_read = arm64eb_context_reg_read;
-            rw->context_reg_write = arm64eb_context_reg_write;
-        } else {
-            rw->context_reg_read = arm64_context_reg_read;
-            rw->context_reg_write = arm64_context_reg_write;
-        }
+        rw->context_reg_read = arm64_context_reg_read;
+        rw->context_reg_write = arm64_context_reg_write;
         break;
 #endif
 
@@ -2175,6 +2174,17 @@ uc_err uc_ctl(uc_engine *uc, uc_control_type control, ...)
             if (uc->init_done) {
                 err = UC_ERR_ARG;
                 break;
+            }
+
+            if (uc->arch == UC_ARCH_ARM) {
+                if (uc->mode & UC_MODE_BIG_ENDIAN) {
+                    // These cpu models don't support big endian code access.
+                    if (model <= UC_CPU_ARM_CORTEX_A15 &&
+                        model >= UC_CPU_ARM_CORTEX_A7) {
+                        err = UC_ERR_ARG;
+                        break;
+                    }
+                }
             }
 
             uc->cpu_model = model;

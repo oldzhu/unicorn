@@ -323,6 +323,7 @@ ARMCPU *cpu_aarch64_init(struct uc_struct *uc)
     ARMCPU *cpu;
     CPUState *cs;
     CPUClass *cc;
+    CPUARMState *env;
 
     cpu = calloc(1, sizeof(*cpu));
     if (cpu == NULL) {
@@ -368,6 +369,19 @@ ARMCPU *cpu_aarch64_init(struct uc_struct *uc)
     cpu_address_space_init(cs, 0, cs->memory);
 
     qemu_init_vcpu(cs);
+
+    env = &cpu->env;
+    if (uc->mode & UC_MODE_BIG_ENDIAN) {
+        for (int i = 0; i < 4; i ++) {
+            env->cp15.sctlr_el[i] |= SCTLR_EE;
+            env->cp15.sctlr_el[i] |= SCTLR_E0E;
+        }
+    }
+
+    // Backward compatability to enable FULL 64bits address space.
+    env->pstate = PSTATE_MODE_EL1h;
+
+    arm_rebuild_hflags(env);
 
     return cpu;
 }

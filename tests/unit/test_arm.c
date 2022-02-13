@@ -63,6 +63,37 @@ static void test_armeb_sub()
     int r_r1;
 
     uc_common_setup(&uc, UC_ARCH_ARM, UC_MODE_ARM | UC_MODE_BIG_ENDIAN, code,
+                    sizeof(code) - 1, UC_CPU_ARM_1176);
+    OK(uc_reg_write(uc, UC_ARM_REG_R0, &r_r0));
+    OK(uc_reg_write(uc, UC_ARM_REG_R2, &r_r2));
+    OK(uc_reg_write(uc, UC_ARM_REG_R3, &r_r3));
+
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code) - 1, 0, 0));
+
+    OK(uc_reg_read(uc, UC_ARM_REG_R0, &r_r0));
+    OK(uc_reg_read(uc, UC_ARM_REG_R1, &r_r1));
+    OK(uc_reg_read(uc, UC_ARM_REG_R2, &r_r2));
+    OK(uc_reg_read(uc, UC_ARM_REG_R3, &r_r3));
+
+    TEST_CHECK(r_r0 == 0x37);
+    TEST_CHECK(r_r2 == 0x6789);
+    TEST_CHECK(r_r3 == 0x3333);
+    TEST_CHECK(r_r1 == 0x3456);
+
+    OK(uc_close(uc));
+}
+
+static void test_armeb_be8_sub()
+{
+    uc_engine *uc;
+    char code[] =
+        "\x37\x00\xa0\xe3\x03\x10\x42\xe0"; // mov r0, #0x37; sub r1, r2, r3
+    int r_r0 = 0x1234;
+    int r_r2 = 0x6789;
+    int r_r3 = 0x3333;
+    int r_r1;
+
+    uc_common_setup(&uc, UC_ARCH_ARM, UC_MODE_ARM | UC_MODE_ARMBE8, code,
                     sizeof(code) - 1, UC_CPU_ARM_CORTEX_A15);
     OK(uc_reg_write(uc, UC_ARM_REG_R0, &r_r0));
     OK(uc_reg_write(uc, UC_ARM_REG_R2, &r_r2));
@@ -90,7 +121,7 @@ static void test_arm_thumbeb_sub()
     int r_sp = 0x1234;
 
     uc_common_setup(&uc, UC_ARCH_ARM, UC_MODE_THUMB | UC_MODE_BIG_ENDIAN, code,
-                    sizeof(code) - 1, UC_CPU_ARM_CORTEX_A15);
+                    sizeof(code) - 1, UC_CPU_ARM_1176);
     OK(uc_reg_write(uc, UC_ARM_REG_SP, &r_sp));
 
     OK(uc_emu_start(uc, code_start | 1, code_start + sizeof(code) - 1, 0, 0));
@@ -615,9 +646,91 @@ static void test_arm_read_sctlr()
     OK(uc_close(uc));
 }
 
+static void test_arm_be_cpsr_sctlr()
+{
+    uc_engine *uc;
+    uc_arm_cp_reg reg;
+    uint32_t cpsr;
+
+    OK(uc_open(UC_ARCH_ARM, UC_MODE_BIG_ENDIAN, &uc));
+    OK(uc_ctl_set_cpu_model(
+        uc, UC_CPU_ARM_1176)); // big endian code, big endian data
+
+    // SCTLR. See arm reference.
+    reg.cp = 15;
+    reg.is64 = 0;
+    reg.sec = 0;
+    reg.crn = 1;
+    reg.crm = 0;
+    reg.opc1 = 0;
+    reg.opc2 = 0;
+
+    OK(uc_reg_read(uc, UC_ARM_REG_CP_REG, &reg));
+    OK(uc_reg_read(uc, UC_ARM_REG_CPSR, &cpsr));
+
+    TEST_CHECK((reg.val & (1 << 7)) != 0);
+    TEST_CHECK((cpsr & (1 << 9)) != 0);
+
+    OK(uc_close(uc));
+
+    OK(uc_open(UC_ARCH_ARM, UC_MODE_ARMBE8, &uc));
+    OK(uc_ctl_set_cpu_model(uc, UC_CPU_ARM_CORTEX_A15));
+
+    // SCTLR. See arm reference.
+    reg.cp = 15;
+    reg.is64 = 0;
+    reg.sec = 0;
+    reg.crn = 1;
+    reg.crm = 0;
+    reg.opc1 = 0;
+    reg.opc2 = 0;
+
+    OK(uc_reg_read(uc, UC_ARM_REG_CP_REG, &reg));
+    OK(uc_reg_read(uc, UC_ARM_REG_CPSR, &cpsr));
+
+    // SCTLR.B == 0
+    TEST_CHECK((reg.val & (1 << 7)) == 0);
+    TEST_CHECK((cpsr & (1 << 9)) != 0);
+
+    OK(uc_close(uc));
+}
+
+static void test_arm_switch_endian()
+{
+    uc_engine *uc;
+    char code[] = "\x00\x00\x91\xe5"; // ldr r0, [r1]
+    uint32_t r_r1 = (uint32_t)code_start;
+    uint32_t r_r0, r_cpsr;
+
+    uc_common_setup(&uc, UC_ARCH_ARM, UC_MODE_ARM, code, sizeof(code) - 1,
+                    UC_CPU_ARM_CORTEX_A15);
+    OK(uc_reg_write(uc, UC_ARM_REG_R1, &r_r1));
+
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code) - 1, 0, 0));
+
+    OK(uc_reg_read(uc, UC_ARM_REG_R0, &r_r0));
+
+    // Little endian
+    TEST_CHECK(r_r0 == 0xe5910000);
+
+    OK(uc_reg_read(uc, UC_ARM_REG_CPSR, &r_cpsr));
+    r_cpsr |= (1 << 9);
+    OK(uc_reg_write(uc, UC_ARM_REG_CPSR, &r_cpsr));
+
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code) - 1, 0, 0));
+
+    OK(uc_reg_read(uc, UC_ARM_REG_R0, &r_r0));
+
+    // Big endian
+    TEST_CHECK(r_r0 == 0x000091e5);
+
+    OK(uc_close(uc));
+}
+
 TEST_LIST = {{"test_arm_nop", test_arm_nop},
              {"test_arm_thumb_sub", test_arm_thumb_sub},
              {"test_armeb_sub", test_armeb_sub},
+             {"test_armeb_be8_sub", test_armeb_be8_sub},
              {"test_arm_thumbeb_sub", test_arm_thumbeb_sub},
              {"test_arm_thumb_ite", test_arm_thumb_ite},
              {"test_arm_m_thumb_mrs", test_arm_m_thumb_mrs},
@@ -633,4 +746,6 @@ TEST_LIST = {{"test_arm_nop", test_arm_nop},
              {"test_arm_hflags_rebuilt", test_arm_hflags_rebuilt},
              {"test_arm_mem_access_abort", test_arm_mem_access_abort},
              {"test_arm_read_sctlr", test_arm_read_sctlr},
+             {"test_arm_be_cpsr_sctlr", test_arm_be_cpsr_sctlr},
+             {"test_arm_switch_endian", test_arm_switch_endian},
              {NULL, NULL}};
