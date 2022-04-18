@@ -1,16 +1,17 @@
 #![allow(non_camel_case_types)]
 use bitflags::bitflags;
 
-pub const API_MAJOR: u64 = 1;
+pub const API_MAJOR: u64 = 2;
 pub const API_MINOR: u64 = 0;
-pub const VERSION_MAJOR: u64 = 1;
+pub const VERSION_MAJOR: u64 = 2;
 pub const VERSION_MINOR: u64 = 0;
-pub const VERSION_EXTRA: u64 = 2;
+pub const VERSION_EXTRA: u64 = 6;
 pub const SECOND_SCALE: u64 = 1_000_000;
 pub const MILISECOND_SCALE: u64 = 1_000;
 
 #[repr(C)]
 #[derive(PartialEq, Debug, Clone, Copy)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum uc_error {
     OK = 0,
     NOMEM = 1,
@@ -89,10 +90,12 @@ bitflags! {
 
 #[repr(C)]
 #[derive(PartialEq, Debug, Clone, Copy)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Query {
     MODE = 1,
     PAGE_SIZE = 2,
     ARCH = 3,
+    TIMEOUT = 4,
 }
 
 bitflags! {
@@ -124,7 +127,29 @@ pub enum Arch {
     PPC = 5,
     SPARC = 6,
     M68K = 7,
-    MAX = 8,
+    RISCV = 8,
+    S390X = 9,
+    MAX = 10,
+}
+
+impl TryFrom<usize> for Arch {
+    type Error = uc_error;
+
+    fn try_from(v: usize) -> Result<Self, Self::Error> {
+        match v {
+            x if x == Self::ARM as usize => Ok(Self::ARM),
+            x if x == Self::ARM64 as usize => Ok(Self::ARM64),
+            x if x == Self::MIPS as usize => Ok(Self::MIPS),
+            x if x == Self::X86 as usize => Ok(Self::X86),
+            x if x == Self::PPC as usize => Ok(Self::PPC),
+            x if x == Self::SPARC as usize => Ok(Self::SPARC),
+            x if x == Self::M68K as usize => Ok(Self::M68K),
+            x if x == Self::RISCV as usize => Ok(Self::RISCV),
+            x if x == Self::S390X as usize => Ok(Self::S390X),
+            x if x == Self::MAX as usize => Ok(Self::MAX),
+            _ => Err(uc_error::ARCH),
+        }
+    }
 }
 
 bitflags! {
@@ -137,7 +162,8 @@ bitflags! {
         const THUMB = 0x10;
         const MCLASS = 0x20;
         const V8 = 0x40;
-        const ARM926 = 0x80;
+        const ARMBE8 = 0x80;
+        const ARM926 = Self::ARMBE8.bits;
         const ARM946 = 0x100;
         const ARM1176 = 0x200;
         const MICRO = Self::THUMB.bits;
@@ -154,5 +180,7 @@ bitflags! {
         const SPARC32 = Self::MIPS32.bits;
         const SPARC64 = Self::MIPS64.bits;
         const V9 = Self::THUMB.bits;
+        const RISCV32 = Self::MIPS32.bits;
+        const RISCV64 = Self::MIPS64.bits;
     }
 }

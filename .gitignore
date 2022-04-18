@@ -12,23 +12,7 @@
 *.jar
 *~
 
-qemu/config-all-devices.mak
-
-qemu/aarch64-softmmu/
-qemu/aarch64eb-softmmu/
-qemu/arm-softmmu/
-qemu/armeb-softmmu/
-qemu/m68k-softmmu/
-qemu/mips64el-softmmu/
-qemu/mips64-softmmu/
-qemu/mipsel-softmmu/
-qemu/mips-softmmu/
-qemu/sparc64-softmmu/
-qemu/sparc-softmmu/
-qemu/i386-softmmu/
-qemu/x86_64-softmmu/
-qemu/ppc-softmmu/
-qemu/ppc64-softmmu/
+qemu/*-softmmu/
 
 tags
 qemu/config-host.ld
@@ -60,6 +44,7 @@ _*.txt
 _*.diff
 tmp/
 
+bindings/java/unicorn_Unicorn.h
 bindings/python/build/
 bindings/python/dist/
 bindings/python/src/
@@ -67,8 +52,8 @@ bindings/python/unicorn.egg-info/
 bindings/python/unicorn/lib/
 bindings/python/unicorn/include/
 bindings/python/MANIFEST
-bindings/rust/target/
-bindings/rust/Cargo.lock
+target/
+Cargo.lock
 config.log
 
 
@@ -97,6 +82,8 @@ config.log
 x64/
 Win32/
 build/
+build_*
+rust_build
 [Bb]in/
 [Oo]bj/
 packages/

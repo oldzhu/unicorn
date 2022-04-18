@@ -1,8 +1,7 @@
-#![allow(non_camel_case_types)]
-
 // ARM64 registers
 #[repr(C)]
 #[derive(PartialEq, Debug, Clone, Copy)]
+#[allow(non_camel_case_types)]
 pub enum RegisterARM64 {
     INVALID = 0,
     X29 = 1,
@@ -269,25 +268,25 @@ pub enum RegisterARM64 {
     PC = 260,
     CPACR_EL1 = 261,
 
-    // thread registers
+    // thread registers, depreciated, use CP_REG instead
     TPIDR_EL0 = 262,
     TPIDRRO_EL0 = 263,
     TPIDR_EL1 = 264,
     PSTATE = 265,
 
-    // exception link registers
+    // exception link registers, depreciated, use CP_REG instead
     ELR_EL0 = 266,
     ELR_EL1 = 267,
     ELR_EL2 = 268,
     ELR_EL3 = 269,
 
-    // stack pointers registers
+    // stack pointers registers, depreciated, use CP_REG instead
     SP_EL0 = 270,
     SP_EL1 = 271,
     SP_EL2 = 272,
     SP_EL3 = 273,
 
-    // other CP15 registers
+    // other CP15 registers, depreciated, use CP_REG instead
     TTBR0_EL1 = 274,
     TTBR1_EL1 = 275,
     ESR_EL0 = 276,
@@ -304,8 +303,8 @@ pub enum RegisterARM64 {
     VBAR_EL1 = 287,
     VBAR_EL2 = 288,
     VBAR_EL3 = 289,
-    ENDING = 290,
-
+    CP_REG = 290,
+    ENDING = 291,
     // alias registers
     // (assoc) IP0 = 215,
     // (assoc) IP1 = 216,
@@ -318,4 +317,10 @@ impl RegisterARM64 {
     pub const IP1: RegisterARM64 = RegisterARM64::X17;
     pub const FP: RegisterARM64 = RegisterARM64::X29;
     pub const LR: RegisterARM64 = RegisterARM64::X30;
+}
+
+impl From<RegisterARM64> for i32 {
+    fn from(r: RegisterARM64) -> Self {
+        r as i32
+    }
 }
