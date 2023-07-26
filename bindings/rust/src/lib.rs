@@ -34,10 +34,10 @@ extern crate std;
 
 #[macro_use]
 pub mod unicorn_const;
+pub mod ffi; // lets consumers call ffi if desired
 
 mod arm;
 mod arm64;
-mod ffi;
 mod m68k;
 mod mips;
 mod ppc;
@@ -56,7 +56,6 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::{cell::UnsafeCell, ptr};
 use ffi::uc_handle;
 use libc::c_void;
-use unicorn_const::{uc_error, Arch, HookType, MemRegion, MemType, Mode, Permission, Query};
 
 #[derive(Debug)]
 pub struct Context {
@@ -168,6 +167,7 @@ impl<'a> Unicorn<'a, ()> {
 impl<'a> TryFrom<uc_handle> for Unicorn<'a, ()> {
     type Error = uc_error;
 
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn try_from(handle: uc_handle) -> Result<Unicorn<'a, ()>, uc_error> {
         if handle.is_null() {
             return Err(uc_error::HANDLE);
@@ -915,6 +915,7 @@ impl<'a, D> Unicorn<'a, D> {
     /// Remove a hook.
     ///
     /// `hook` is the value returned by `add_*_hook` functions.
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn remove_hook(&mut self, hook: ffi::uc_hook) -> Result<(), uc_error> {
         // drop the hook
         let inner = self.inner_mut();
