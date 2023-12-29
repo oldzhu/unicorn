@@ -89,6 +89,9 @@ include_directories(
     qemu/tcg
 )
 
+# Some distributions on some rare architecures don't auto link atomic for us and
+# we do this manually by adding flags.
+set(ATOMIC_LINKAGE_FIX FALSE)
 if(MSVC)
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         set(MSVC_FLAG  -D__x86_64__)
@@ -191,6 +194,7 @@ else()
             string(FIND "${UC_COMPILER_MACRO}" "__arm__" UC_RET)
             if(${UC_RET} GREATER_EQUAL "0")
                 set(UNICORN_TARGET_ARCH "arm")
+                set(ATOMIC_LINKAGE_FIX TRUE)
                 break()
             endif()
             string(FIND "${UC_COMPILER_MACRO}" "__aarch64__" UC_RET)
@@ -201,11 +205,13 @@ else()
             string(FIND "${UC_COMPILER_MACRO}" "__mips__" UC_RET)
             if(${UC_RET} GREATER_EQUAL "0")
                 set(UNICORN_TARGET_ARCH "mips")
+                set(ATOMIC_LINKAGE_FIX TRUE)
                 break()
             endif()
             string(FIND "${UC_COMPILER_MACRO}" "__sparc__" UC_RET)
             if(${UC_RET} GREATER_EQUAL "0")
                 set(UNICORN_TARGET_ARCH "sparc")
+                set(ATOMIC_LINKAGE_FIX TRUE)
                 break()
             endif()
             string(FIND "${UC_COMPILER_MACRO}" "__ia64__" UC_RET)
@@ -216,16 +222,19 @@ else()
             string(FIND "${UC_COMPILER_MACRO}" "_ARCH_PPC" UC_RET)
             if(${UC_RET} GREATER_EQUAL "0")
                 set(UNICORN_TARGET_ARCH "ppc")
+                set(ATOMIC_LINKAGE_FIX TRUE)
                 break()
             endif()
             string(FIND "${UC_COMPILER_MACRO}" "__riscv" UC_RET)
             if(${UC_RET} GREATER_EQUAL "0")
                 set(UNICORN_TARGET_ARCH "riscv")
+                set(ATOMIC_LINKAGE_FIX TRUE)
                 break()
             endif()
             string(FIND "${UC_COMPILER_MACRO}" "__s390__" UC_RET)
             if(${UC_RET} GREATER_EQUAL "0")
                 set(UNICORN_TARGET_ARCH "s390")
+                set(ATOMIC_LINKAGE_FIX TRUE)
                 break()
             endif()
             string(FIND ${UC_COMPILER_MACRO} "__tricore__" UC_RET)
@@ -279,6 +288,9 @@ else()
     endif()
     if(UNICORN_TRACER)
         set (EXTRA_CFLAGS "${EXTRA_CFLAGS} -DUNICORN_TRACER")
+    endif()
+    if (ATOMIC_LINKAGE_FIX)
+        set (EXTRA_CFLAGS "${EXTRA_CFLAGS} -latomic")
     endif()
 
     set(TARGET_LIST "--target-list=")
@@ -418,6 +430,11 @@ else()
         -Wall
         -fPIC
     )
+    if (ATOMIC_LINKAGE_FIX)
+        add_compile_options(
+            -latomic
+        )
+    endif()
     if(APPLE)
         # This warning is disabled by default for gcc and doesn't cause any bug.
         add_compile_options(
@@ -1192,6 +1209,9 @@ if(BUILD_SHARED_LIBS)
 endif()
 
 set(UNICORN_LINK_LIBRARIES ${UNICORN_LINK_LIBRARIES} unicorn-common)
+if (ATOMIC_LINKAGE_FIX)
+    set(UNICORN_COMPILE_OPTIONS ${UNICORN_COMPILE_OPTIONS} -latomic)
+endif()
 if(UNICORN_HAS_X86)
     set(UNICORN_COMPILE_OPTIONS ${UNICORN_COMPILE_OPTIONS} -DUNICORN_HAS_X86)
     set(UNICORN_LINK_LIBRARIES ${UNICORN_LINK_LIBRARIES} x86_64-softmmu)
@@ -1298,7 +1318,7 @@ if(MINGW)
     set(UNICORN_LINK_LIBRARIES ${UNICORN_LINK_LIBRARIES} pthread)
 endif()
 
-if(UNICORN_TARGET_ARCH STREQUAL "riscv")
+if(ATOMIC_LINKAGE_FIX)
     set(UNICORN_LINK_LIBRARIES ${UNICORN_LINK_LIBRARIES} atomic)
 endif()
 
@@ -1361,6 +1381,13 @@ elseif(NOT ANDROID_ABI)
 else()
     set(SAMPLES_LIB
         unicorn
+    )
+endif()
+
+if(ATOMIC_LINKAGE_FIX)
+    set(SAMPLES_LIB
+        ${SAMPLES_LIB}
+        atomic
     )
 endif()
 
@@ -1450,13 +1477,18 @@ if(UNICORN_INSTALL AND NOT MSVC)
     endif()
     install(FILES $<TARGET_FILE:unicorn_archive> DESTINATION ${CMAKE_INSTALL_LIBDIR})
     install(FILES ${UNICORN_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/unicorn)
+    if (ATOMIC_LINKAGE_FIX)
+        set(ATOMIC_LINK_PKG_CONFIG " -latomic")
+    else()
+        set(ATOMIC_LINK_PKG_CONFIG "")
+    endif()
     file(WRITE ${CMAKE_BINARY_DIR}/unicorn.pc "Name: unicorn\n\
 Description: Unicorn emulator engine\n\
 Version: ${UNICORN_VERSION_MAJOR}.${UNICORN_VERSION_MINOR}.${UNICORN_VERSION_PATCH}\n\
 libdir=${CMAKE_INSTALL_FULL_LIBDIR}\n\
 includedir=${CMAKE_INSTALL_FULL_INCLUDEDIR}\n\
 Libs: -L\$\{libdir\} -lunicorn\n\
-Libs.private: -lpthread -lm\n\
+Libs.private: -lpthread -lm${ATOMIC_LINK_PKG_CONFIG}\n\
 Cflags: -I\$\{includedir\}\n"
     )
     install(FILES ${CMAKE_BINARY_DIR}/unicorn.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
