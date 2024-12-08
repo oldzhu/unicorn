@@ -8,9 +8,8 @@ import shutil
 import subprocess
 import sys
 from setuptools import setup
-from setuptools.command.build import build
+from setuptools.command.build_py import build_py
 from setuptools.command.sdist import sdist
-from setuptools.command.bdist_egg import bdist_egg
 
 log = logging.getLogger(__name__)
 
@@ -119,6 +118,8 @@ def build_libraries():
         cmake_args = ["cmake", '-B', BUILD_DIR, '-S', UC_DIR, "-DCMAKE_BUILD_TYPE=" + conf]
         if os.getenv("TRACE"):
             cmake_args += ["-DUNICORN_TRACER=on"]
+        if conf == "Debug":
+            cmake_args += ["-DUNICORN_LOGGING=on"]
         subprocess.check_call(cmake_args, cwd=UC_DIR)
         threads = os.getenv("THREADS", "4")
         subprocess.check_call(["cmake", "--build", ".", "-j" + threads], cwd=BUILD_DIR)
@@ -134,7 +135,7 @@ class CustomSDist(sdist):
         return super().run()
 
 
-class CustomBuild(build):
+class CustomBuild(build_py):
     def run(self):
         if 'LIBUNICORN_PATH' in os.environ:
             log.info("Skipping building C extensions since LIBUNICORN_PATH is set")
@@ -144,30 +145,7 @@ class CustomBuild(build):
         return super().run()
 
 
-class CustomBDistEgg(bdist_egg):
-    def run(self):
-        self.run_command('build')
-        return super().run()
-
-
-cmdclass = {'build': CustomBuild, 'sdist': CustomSDist, 'bdist_egg': CustomBDistEgg}
-
-try:
-    from setuptools.command.develop import develop
-
-
-    class CustomDevelop(develop):
-        def run(self):
-            log.info("Building C extensions")
-            build_libraries()
-            return super().run()
-
-
-    cmdclass['develop'] = CustomDevelop
-except ImportError:
-    print("Proper 'develop' support unavailable.")
-
 setup(
-    cmdclass=cmdclass,
+    cmdclass={'build_py': CustomBuild, 'sdist': CustomSDist},
     has_ext_modules=lambda: True,  # It's not a Pure Python wheel
 )
