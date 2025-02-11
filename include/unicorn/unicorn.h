@@ -72,7 +72,7 @@ typedef size_t uc_hook;
 // Unicorn API version
 #define UC_API_MAJOR 2
 #define UC_API_MINOR 1
-#define UC_API_PATCH 1
+#define UC_API_PATCH 2
 // Release candidate version, 255 means the official release.
 #define UC_API_EXTRA 255
 
@@ -418,7 +418,10 @@ typedef enum uc_hook_type {
     (UC_HOOK_MEM_READ + UC_HOOK_MEM_WRITE + UC_HOOK_MEM_FETCH)
 
 /*
-  Callback function for hooking memory (READ, WRITE & FETCH)
+  Callback function for hooking memory (READ, WRITE & FETCH).
+
+  NOTE: The access might be splitted depending on the MMU implementation.
+  UC_TLB_VIRTUAL provides more fine-grained control about memory accessing.
 
   @type: this memory is being READ, or WRITE
   @address: address where memory is being written or read to
@@ -433,6 +436,9 @@ typedef void (*uc_cb_hookmem_t)(uc_engine *uc, uc_mem_type type,
 /*
   Callback function for handling invalid memory access events (UNMAPPED and
     PROT events)
+
+  NOTE: The access might be splitted depending on the MMU implementation.
+  UC_TLB_VIRTUAL provides more fine-grained control about memory accessing.
 
   @type: this memory is being READ, or WRITE
   @address: address where memory is being written or read to
