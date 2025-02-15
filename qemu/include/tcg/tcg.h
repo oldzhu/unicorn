@@ -651,15 +651,6 @@ struct TCGContext {
     /* Threshold to flush the translated code buffer.  */
     void *code_gen_highwater;
 
-#ifdef HAVE_PTHREAD_JIT_PROTECT
-    /*
-     * True for X, False for W.
-     * 
-     * Source: https://developer.apple.com/documentation/apple_silicon/porting_just-in-time_compilers_to_apple_silicon?language=objc
-     */
-    bool code_gen_locked;
-#endif
-
     size_t tb_phys_invalidate_count;
 
     /* Track which vCPU triggers events */
@@ -718,6 +709,7 @@ struct TCGContext {
     TCGv_i64 cpu_bndu[4];
 
     /* qemu/tcg/i386/tcg-target.inc.c */
+    /* qemu/tcg/aarch64/tcg-target.inc.c */
     void *tb_ret_addr;
 
     /* target/riscv/translate.c */
@@ -1585,5 +1577,12 @@ struct jit_code_entry {
 
 void uc_del_inline_hook(uc_engine *uc, struct hook *hk);
 void uc_add_inline_hook(uc_engine *uc, struct hook *hk, void** args, int args_len);
+
+static inline bool tcg_uc_has_hookmem(TCGContext *s)
+{
+    return HOOK_EXISTS(s->uc, UC_HOOK_MEM_READ) ||
+        HOOK_EXISTS(s->uc, UC_HOOK_MEM_READ_AFTER) ||
+        HOOK_EXISTS(s->uc, UC_HOOK_MEM_WRITE);
+}
 
 #endif /* TCG_H */
