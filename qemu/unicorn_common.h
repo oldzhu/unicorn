@@ -10,7 +10,10 @@
 // codes for unicorns purposes.
 
 void vm_start(struct uc_struct*);
-void tcg_exec_init(struct uc_struct *uc, unsigned long tb_size);
+void tcg_exec_init(struct uc_struct *uc, uint32_t tb_size);
+bool unicorn_fill_tlb(CPUState *cs, vaddr address, int size,
+                      MMUAccessType rw, int mmu_idx,
+                      bool probe, uintptr_t retaddr);
 
 // return true on success, false on failure
 static inline bool cpu_physical_mem_read(AddressSpace *as, hwaddr addr,
@@ -36,6 +39,10 @@ static void release_common(void *t)
 #if TCG_TARGET_REG_BITS == 32
     int i;
 #endif
+
+    // Clear bps
+    cpu_watchpoint_remove_all(CPU(s->uc->cpu), BP_CPU);
+    cpu_breakpoint_remove_all(CPU(s->uc->cpu), BP_CPU);
 
     // Clean TCG.
     TCGOpDef* def = s->tcg_op_defs;
@@ -69,8 +76,6 @@ static void release_common(void *t)
     /* qemu/util/qht.c:264: map = qht_map_create(n_buckets); */
     qht_destroy(&s->tb_ctx.htable);
 
-    cpu_watchpoint_remove_all(CPU(s->uc->cpu), BP_CPU);
-    cpu_breakpoint_remove_all(CPU(s->uc->cpu), BP_CPU);
 
 #if TCG_TARGET_REG_BITS == 32
     for(i = 0; i < s->nb_globals; i++) {
@@ -91,6 +96,31 @@ static inline void target_page_init(struct uc_struct* uc)
     uc->target_page_align = TARGET_PAGE_SIZE - 1;
 }
 
+static uc_err uc_set_tlb(struct uc_struct *uc, int mode) {
+    switch (mode) {
+        case UC_TLB_VIRTUAL:
+            uc->cpu->cc->tlb_fill = unicorn_fill_tlb;
+            return UC_ERR_OK;
+        case UC_TLB_CPU:
+            uc->cpu->cc->tlb_fill = uc->cpu->cc->tlb_fill_cpu;
+            return UC_ERR_OK;
+        default:
+            return UC_ERR_ARG;
+    }
+}
+
+MemoryRegion *find_memory_mapping(struct uc_struct *uc, hwaddr address)
+{
+    hwaddr xlat = 0;
+    hwaddr len = 1;
+    MemoryRegion *mr = address_space_translate(&uc->address_space_memory, address, &xlat, &len, false, MEMTXATTRS_UNSPECIFIED);
+
+    if (mr == &uc->io_mem_unassigned) {
+        return NULL;
+    }
+    return mr;
+}
+
 void softfloat_init(void);
 static inline void uc_common_init(struct uc_struct* uc)
 {
@@ -102,13 +132,43 @@ static inline void uc_common_init(struct uc_struct* uc)
     uc->memory_map = memory_map;
     uc->memory_map_ptr = memory_map_ptr;
     uc->memory_unmap = memory_unmap;
+    uc->memory_moveout = memory_moveout;
+    uc->memory_movein = memory_movein;
     uc->readonly_mem = memory_region_set_readonly;
     uc->target_page = target_page_init;
     uc->softfloat_initialize = softfloat_init;
     uc->tcg_flush_tlb = tcg_flush_softmmu_tlb;
     uc->memory_map_io = memory_map_io;
+    uc->set_tlb = uc_set_tlb;
+    uc->memory_mapping = find_memory_mapping;
+    uc->memory_filter_subregions = memory_region_filter_subregions;
+    uc->flatview_copy = flatview_copy;
+    uc->memory_cow = memory_cow;
 
     if (!uc->release)
         uc->release = release_common;
 }
+
+#define CHECK_REG_TYPE(type) do {             \
+    if (unlikely(*size < sizeof(type))) {     \
+        return UC_ERR_OVERFLOW;               \
+    }                                         \
+    *size = sizeof(type);                     \
+    ret = UC_ERR_OK;                          \
+} while(0)
+
+#define CHECK_RET_DEPRECATE(ret, regid) do {                                    \
+    if (ret == UC_ERR_ARG && !getenv("UC_IGNORE_REG_BREAK")) {                  \
+        fprintf(stderr,                                                         \
+        "WARNING: Your register accessing on id %"PRIu32" is deprecated "       \
+        "and will get UC_ERR_ARG in the future release (2.2.0) because "        \
+        "the accessing is either no-op or not defined. If you believe "         \
+        "the register should be implemented or there is a bug, please "         \
+        "submit an issue to https://github.com/unicorn-engine/unicorn. "        \
+        "Set UC_IGNORE_REG_BREAK=1 to ignore this warning.\n",                  \
+        regid);                                                                 \
+        ret = UC_ERR_OK;                                                        \
+    }                                                                           \
+} while (0)
+
 #endif

@@ -4,6 +4,10 @@
 #ifndef UNICORN_ARCH_POSTFIX
 #define UNICORN_ARCH_POSTFIX _ppc64
 #endif
+#define unicorn_fill_tlb unicorn_fill_tlb_ppc64
+#define reg_read reg_read_ppc64
+#define reg_write reg_write_ppc64
+#define uc_init uc_init_ppc64
 #define uc_add_inline_hook uc_add_inline_hook_ppc64
 #define uc_del_inline_hook uc_del_inline_hook_ppc64
 #define tb_invalidate_phys_range tb_invalidate_phys_range_ppc64
@@ -50,6 +54,7 @@
 #define vm_start vm_start_ppc64
 #define address_space_dispatch_compact address_space_dispatch_compact_ppc64
 #define flatview_translate flatview_translate_ppc64
+#define flatview_copy flatview_copy_ppc64
 #define address_space_translate_for_iotlb address_space_translate_for_iotlb_ppc64
 #define qemu_get_cpu qemu_get_cpu_ppc64
 #define cpu_address_space_init cpu_address_space_init_ppc64
@@ -86,6 +91,7 @@
 #define iotlb_to_section iotlb_to_section_ppc64
 #define address_space_dispatch_new address_space_dispatch_new_ppc64
 #define address_space_dispatch_free address_space_dispatch_free_ppc64
+#define address_space_dispatch_clear address_space_dispatch_clear_ppc64
 #define flatview_read_continue flatview_read_continue_ppc64
 #define address_space_read_full address_space_read_full_ppc64
 #define address_space_write address_space_write_ppc64
@@ -119,7 +125,10 @@
 #define memory_map memory_map_ppc64
 #define memory_map_io memory_map_io_ppc64
 #define memory_map_ptr memory_map_ptr_ppc64
+#define memory_cow memory_cow_ppc64
 #define memory_unmap memory_unmap_ppc64
+#define memory_moveout memory_moveout_ppc64
+#define memory_movein memory_movein_ppc64
 #define memory_free memory_free_ppc64
 #define flatview_unref flatview_unref_ppc64
 #define address_space_get_flatview address_space_get_flatview_ppc64
@@ -138,7 +147,9 @@
 #define memory_region_get_ram_addr memory_region_get_ram_addr_ppc64
 #define memory_region_add_subregion memory_region_add_subregion_ppc64
 #define memory_region_del_subregion memory_region_del_subregion_ppc64
+#define memory_region_add_subregion_overlap memory_region_add_subregion_overlap_ppc64
 #define memory_region_find memory_region_find_ppc64
+#define memory_region_filter_subregions memory_region_filter_subregions_ppc64
 #define memory_listener_register memory_listener_register_ppc64
 #define memory_listener_unregister memory_listener_unregister_ppc64
 #define address_space_remove_listeners address_space_remove_listeners_ppc64
@@ -146,6 +157,7 @@
 #define address_space_destroy address_space_destroy_ppc64
 #define memory_region_init_ram memory_region_init_ram_ppc64
 #define memory_mapping_list_add_merge_sorted memory_mapping_list_add_merge_sorted_ppc64
+#define find_memory_mapping find_memory_mapping_ppc64
 #define exec_inline_op exec_inline_op_ppc64
 #define floatx80_default_nan floatx80_default_nan_ppc64
 #define float_raise float_raise_ppc64
@@ -1277,11 +1289,11 @@
 #define gen_helper_vfp_set_fpscr gen_helper_vfp_set_fpscr_ppc64
 #define gen_helper_cpsr_read gen_helper_cpsr_read_ppc64
 #define gen_helper_cpsr_write gen_helper_cpsr_write_ppc64
+#define tlb_reset_dirty_by_vaddr tlb_reset_dirty_by_vaddr_ppc64
+#define helper_stqcx_le_parallel helper_stqcx_le_parallel_ppc64
+#define helper_stqcx_be_parallel helper_stqcx_be_parallel_ppc64
 #define ppc_cpu_unrealize ppc_cpu_unrealize_ppc64
 #define ppc_cpu_instance_finalize ppc_cpu_instance_finalize_ppc64
-#define ppc_reg_reset ppc_reg_reset_ppc64
-#define ppc_reg_read ppc_reg_read_ppc64
-#define ppc_reg_write ppc_reg_write_ppc64
 #define ppc_cpu_do_interrupt ppc_cpu_do_interrupt_ppc64
 #define ppc_cpu_do_system_reset ppc_cpu_do_system_reset_ppc64
 #define ppc_cpu_do_fwnmi_machine_check ppc_cpu_do_fwnmi_machine_check_ppc64

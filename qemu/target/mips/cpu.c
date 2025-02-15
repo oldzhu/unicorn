@@ -147,7 +147,7 @@ static void mips_cpu_class_init(CPUClass *c)
     cc->do_unaligned_access = mips_cpu_do_unaligned_access;
     cc->get_phys_page_debug = mips_cpu_get_phys_page_debug;
     cc->tcg_initialize = mips_tcg_init;
-    cc->tlb_fill = mips_cpu_tlb_fill;
+    cc->tlb_fill_cpu = mips_cpu_tlb_fill;
 }
 
 MIPSCPU *cpu_mips_init(struct uc_struct *uc)
@@ -157,10 +157,11 @@ MIPSCPU *cpu_mips_init(struct uc_struct *uc)
     CPUClass *cc;
     CPUMIPSState *env;
 
-    cpu = calloc(1, sizeof(*cpu));
+    cpu = qemu_memalign(8, sizeof(*cpu));
     if (cpu == NULL) {
         return NULL;
     }
+    memset((void*)cpu, 0, sizeof(*cpu));
 
 #ifdef TARGET_MIPS64
     if (uc->cpu_model == INT_MAX) {
