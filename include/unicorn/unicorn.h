@@ -65,14 +65,14 @@ typedef size_t uc_hook;
 #define UNICORN_DEPRECATED __declspec(deprecated)
 #else
 #pragma message(                                                               \
-        "WARNING: You need to implement UNICORN_DEPRECATED for this compiler")
+    "WARNING: You need to implement UNICORN_DEPRECATED for this compiler")
 #define UNICORN_DEPRECATED
 #endif
 
 // Unicorn API version
 #define UC_API_MAJOR 2
 #define UC_API_MINOR 1
-#define UC_API_PATCH 2
+#define UC_API_PATCH 3
 // Release candidate version, 255 means the official release.
 #define UC_API_EXTRA 255
 

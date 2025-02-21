@@ -8,11 +8,10 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Generic, Iterable, Iterat
 import ctypes
 import functools
 import weakref
-
+import warnings
 from unicorn import unicorn_const as uc
 from .arch.types import uc_err, uc_engine, uc_context, uc_hook_h, UcReg, VT
 
-# __version__ = f'{uc.UC_VERSION_MAJOR}.{uc.UC_VERSION_MINOR}.{uc.UC_VERSION_PATCH}'
 
 MemRegionStruct = Tuple[int, int, int]
 TBStruct = Tuple[int, int, int]
@@ -1445,6 +1444,16 @@ class Uc(RegStateManager):
         self.__ctl_w(uc.UC_CTL_TLB_TYPE,
             (ctypes.c_uint, mode)
         )
+
+    # For backward compatibility...
+    def ctl_tlb_mode(self, mode: int) -> None:
+        """Deprecated, please use ctl_set_tlb_mode instead.
+
+        Args:
+            mode: tlb mode to use (see UC_TLB_* constants)
+        """
+        warnings.warn('Deprecated method, use ctl_set_tlb_mode', DeprecationWarning)
+        self.ctl_set_tlb_mode(mode)
 
     def ctl_get_tcg_buffer_size(self) -> int:
         """Retrieve TCG buffer size.
