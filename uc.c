@@ -708,6 +708,7 @@ uc_err uc_reg_write(uc_engine *uc, int regid, const void *value)
     if (setpc) {
         // force to quit execution and flush TB
         uc->quit_request = true;
+        uc->skip_sync_pc_on_exit = true;
         break_translation_loop(uc);
     }
 
@@ -1065,7 +1066,7 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
         break;
 #endif
     }
-
+    uc->skip_sync_pc_on_exit = false;
     uc->stop_request = false;
 
     uc->emu_count = count;
