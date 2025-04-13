@@ -1598,8 +1598,8 @@ static void test_x86_mmu(void)
     OK(uc_emu_start(uc, rip, 0x0, 0, 0));
     OK(uc_mem_read(uc, 0x1000, &parrent, sizeof(parrent)));
     OK(uc_mem_read(uc, 0x2000, &child, sizeof(child)));
-    TEST_CHECK(parrent == 60);
-    TEST_CHECK(child == 42);
+    TEST_CHECK(LEINT64(parrent) == 60);
+    TEST_CHECK(LEINT64(child) == 42);
     OK(uc_context_free(context));
     OK(uc_close(uc));
 }
@@ -1619,7 +1619,7 @@ static void test_x86_vtlb(void)
     uc_hook hook;
     char code[] = "\xeb\x02\x90\x90\x90\x90\x90\x90"; // jmp 4; nop; nop; nop;
                                                       // nop; nop; nop
-    uint64_t r_eip = 0;
+    uint32_t r_eip = 0;
 
     uc_common_setup(&uc, UC_ARCH_X86, UC_MODE_32, code, sizeof(code) - 1);
 

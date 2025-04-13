@@ -73,19 +73,11 @@ fn build_with_cmake() {
             // Set cmake path for the cmake crate
             config.define("CMAKE_PROGRAM", cmake_path.to_str().unwrap());
         }
-
-        // MSVC-specific linker flags
-        println!("cargo:rustc-link-arg=/FORCE:MULTIPLE");
         true
     } else {
         // Non-MSVC setup
         ninja_available()
     };
-
-    // GNU-specific linker flags (but not on macOS)
-    // if compiler.is_like_gnu() && env::consts::OS != "macos" {
-    //     println!("cargo:rustc-link-arg=-Wl,-allow-multiple-definition");
-    // }
 
     // Configure build generator
     if has_ninja {
@@ -165,6 +157,56 @@ fn build_with_cmake() {
     }
 }
 
+fn watch_source_files() {
+    let current_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let project_root = std::path::Path::new(&current_dir)
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    println!(
+        "cargo:rerun-if-changed={}",
+        project_root.join("uc.c").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        project_root.join("list.c").display()
+    );
+
+    // Directories to watch for changes
+    let watch_dirs = vec!["qemu", "include", "bindings", "glib_compat"];
+
+    let watch_extensions = vec![".c", ".h"];
+
+    for dir in watch_dirs {
+        let dir_path = project_root.join(dir);
+        if dir_path.exists() {
+            register_dir_files(&dir_path, &watch_extensions);
+        }
+    }
+}
+
+fn register_dir_files(dir: &std::path::Path, extensions: &[&str]) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                register_dir_files(&path, extensions);
+            } else if let Some(ext) = path.extension() {
+                if extensions
+                    .iter()
+                    .any(|&e| e == format!(".{}", ext.to_string_lossy()))
+                {
+                    println!("cargo:rerun-if-changed={}", path.display());
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Renamer;
 
@@ -185,7 +227,7 @@ impl ParseCallbacks for Renamer {
             return original_item_name
                 .strip_prefix("uc_")
                 .and_then(|suffix| suffix.strip_suffix("_reg"))
-                .map(|suffix| format!("Register{}", suffix.to_uppercase()));
+                .map(|suffix| format!("Register{}", suffix.replace('_', "").to_uppercase()));
         }
 
         if original_item_name.ends_with("_insn") {
@@ -291,7 +333,6 @@ fn generate_bindings() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../../include/unicorn/unicorn.h"
     );
-    println!("cargo:rerun-if-changed={HEADER_PATH}");
 
     let bitflag_enums = [
         "uc_hook_type",
@@ -325,6 +366,8 @@ fn generate_bindings() {
 }
 
 fn main() {
+    watch_source_files();
+
     generate_bindings();
 
     match pkg_config::Config::new()
